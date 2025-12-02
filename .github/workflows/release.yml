@@ -1,0 +1,64 @@
+name: 'Release'
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: write-all
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  release:
+    name: 'Release'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # ✨ НОВЫЙ ШАГ: Setup Node.js
+      - name: 'Setup Node.js'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'  # Минимум для semantic-release v24+
+          
+      # 🔍 Опционально: проверим версию Node.js
+      - name: 'Check Node.js version'
+        run: node --version
+
+      - name: 'Release'
+        uses: cycjimmy/semantic-release-action@v4
+        id: semantic
+        with:
+          semantic_version: 25  # Обновлено до v25
+          branch: main
+          extra_plugins: |
+            @semantic-release/commit-analyzer@13
+            @semantic-release/exec@6.0.3
+            @semantic-release/changelog@6.0.3
+            conventional-changelog-conventionalcommits@8.0.0
+
+      - name: 'Create ZIP archive'
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          zip -r release.zip . -x ".git/*" ".gitignore" ".github/*"
+
+      - name: 'Echo release version'
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          echo "🎉 New release: ${{ steps.semantic.outputs.new_release_version }}"
+
+      - name: 'Upload ZIP to release'
+        if: steps.semantic.outputs.new_release_published == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.semantic.outputs.new_release_version }}
+          files: release.zip
+          append_body: true
